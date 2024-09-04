@@ -1,0 +1,6 @@
+TOKEN=your_telegram_bot_token
+DB_NAME=your_database_name
+USER=your_database_user
+HOST=your_database_host
+PASSWORD=your_database_password
+PORT=your_database_port
