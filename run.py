@@ -1,7 +1,6 @@
 import telebot
 import os
 
-from dotenv import  load_dotenv
 from telebot import types
 from app.calc import (revenue_per_day, avg_revenue_per_order_daily,
                       previous_day_revenue, previous_day_avg_revenue_per_order,
@@ -15,8 +14,11 @@ from app.calc import (revenue_per_day, avg_revenue_per_order_daily,
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from app.config import config
 
+# Defining telegram bot token
 bot = telebot.TeleBot(config.TOKEN)
 
+
+# Making main keyboard
 def markup_keyboard():
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton('Today', callback_data='today'))
@@ -26,14 +28,16 @@ def markup_keyboard():
     return markup
 
 
+# Command start with Inline Keyboard
 @bot.message_handler(commands=['start'])
 def start(message):
     bot.send_message(message.chat.id,
-                     'Hi, dude!👋\n\nI can send you some metrics and graphics and other smart \
+                     'Hi, dude!👋\n\nI can send you some metrics, graphics and other smart \
 stuff🙂\n\nJust select the date and check this out',
                      reply_markup=markup_keyboard())
 
 
+# Processing callback data from keyboard
 @bot.callback_query_handler(func=lambda call: call.data in ['today', 'select_exact_date', 'select_month', 'annual_report'])
 def choose_type(call):
     bot.clear_step_handler_by_chat_id(call.message.chat.id)
@@ -57,6 +61,7 @@ choose another date', reply_markup=markup_keyboard())
                                parse_mode='html')
 
 
+        # Sending annual report graphics
         plot_path = annual_revenue(call.message.chat.id)
         if plot_path:
             with open(plot_path, 'rb') as photo:
@@ -78,12 +83,15 @@ choose another date', reply_markup=markup_keyboard())
             os.remove(box_plot_path)
 
 
+# Func that sends main metrics for selected option "Today"
 def get_date(message):
     bot.clear_step_handler_by_chat_id(message.chat.id)
     given_date = message.text
     try:
+        # Parsing entered date
         parsed_date = given_date
 
+        # Calling functions from calc.py
         revenue = float(revenue_per_day(parsed_date))
         previous_revenue = float(previous_day_revenue(parsed_date))
         avg_per_order = float(avg_revenue_per_order_daily(parsed_date))
@@ -91,7 +99,7 @@ def get_date(message):
         arpu = float(arpu_daily(parsed_date))
         previous_arpu = float(previous_arpu_daily(parsed_date))
 
-
+        # Checking data availability
         if revenue == 0:
             bot.send_message(message.chat.id,
                              f'No revenue data available for <em>{parsed_date}</em>. \n\nPlease choose another date and \
@@ -99,35 +107,44 @@ make sure that you want to know statistics of <u><em>2023rd year</em></u>😉', 
             bot.register_next_step_handler(message, get_date)
             return
 
+        # Checking and calculating perc diff for revenue daily
         if previous_revenue > 0:
             percent_diff = ((revenue - previous_revenue) / previous_revenue) * 100
             percent_diff_str = f" ({'+' if percent_diff > 0 else ''}{percent_diff:.2f}%) {'📈' if percent_diff > 0 else '📉'}"
         else:
             percent_diff_str = " (No previous day data available)"
 
+        # Checking and calculating perc diff for AOV revenue daily
         if previous_avg_per_order > 0:
             avg_percent_diff = ((avg_per_order - previous_avg_per_order) / previous_avg_per_order) * 100
             avg_percent_diff_str = f" ({'+' if avg_percent_diff > 0 else ''}{avg_percent_diff:.2f}%) {'📈' if avg_percent_diff > 0 else '📉'}"
         else:
             avg_percent_diff_str = " (No previous day data available)"
 
+        # Checking and calculating perc diff for ARPU revenue daily
         if previous_arpu > 0:
             arpu_percent_diff = ((arpu - previous_arpu) / previous_arpu) * 100
             arpu_percent_diff_str = f" ({'+' if arpu_percent_diff > 0 else ''}{arpu_percent_diff:.2f}%) {'📈' if arpu_percent_diff > 0 else '📉'}"
         else:
             arpu_percent_diff_str = " (No previous day data available)"
 
+        # Sending message with calculated results and applying main Inline Keyboard
         bot.send_message(message.chat.id, f'Here is your statistics for <em>{parsed_date}</em>:\n\n\
 Total revenue: {round(revenue, 2)}$ {percent_diff_str}\n\
 Average revenue per order: {round(avg_per_order, 2)}$ {avg_percent_diff_str}\n\
 ARPU: {round(arpu, 2)}$ {arpu_percent_diff_str}', parse_mode='html', reply_markup=markup_keyboard())
         bot.register_next_step_handler(message, choose_type)
 
+    # Checking if user entered date in right format for us (if not - retry)
     except ValueError:
         message_back = bot.send_message(message.chat.id,
                          'Invalid format🫠\nPlease enter the date in the format <em>yyyy-mm-dd</em>',
                          parse_mode='html')
         bot.register_next_step_handler(message_back, get_date)
+
+
+# Func that sends main metrics for selected option "Select exact date" and applies newly made keyboard that enables to
+# select plot
 def get_month(message):
     bot.clear_step_handler_by_chat_id(message.chat.id)
     given_month = message.text
@@ -159,19 +176,21 @@ def get_month(message):
         else:
             percent_diff_str = " (No previous month data available)"
 
-        # Checking and calculating perc diff for avg revenue monthly
+        # Checking and calculating perc diff for AOV revenue monthly
         if previous_avg_per_order_monthly > 0:
             avg_percent_diff = ((avg_per_order_monthly - previous_avg_per_order_monthly) / previous_avg_per_order_monthly) * 100
             avg_percent_diff_str = f" ({'+' if avg_percent_diff > 0 else ''}{avg_percent_diff:.2f}%) {'📈' if avg_percent_diff > 0 else '📉'}"
         else:
             avg_percent_diff_str = " (No previous month data available)"
 
+        # Checking and calculating perc diff for ARPU revenue monthly
         if previous_arpu_month > 0:
             arpu_percent_diff = ((arpu_month - previous_arpu_month) / previous_arpu_month) * 100
             arpu_percent_diff_str = f" ({'+' if arpu_percent_diff > 0 else ''}{arpu_percent_diff:.2f}%) {'📈' if arpu_percent_diff > 0 else '📉'}"
         else:
             arpu_percent_diff_str = " (No previous month data available)"
 
+        # Making new Inline keyboard for user to be able to choose wanted graphic
         markup = InlineKeyboardMarkup()
 
         markup.add(InlineKeyboardButton("Revenue Distribution", callback_data=f"revenue_plot_{parsed_month}"))
@@ -183,25 +202,31 @@ def get_month(message):
         markup.add(InlineKeyboardButton("Back", callback_data="back_to_keyboard"))
 
 
-        # Message sending
+        # Sending message with calculated results and applying Inline Keyboard from above
         bot.send_message(message.chat.id, f'Here is your statistics for <em>{parsed_month}</em>:\n\n\
 Total revenue: {round(revenue_monthly, 2)}$ {percent_diff_str}\n\
 Average revenue per order: {round(avg_per_order_monthly, 2)}$ {avg_percent_diff_str}\n\
 ARPU: {round(arpu_month, 2)}$ {arpu_percent_diff_str}', parse_mode='html', reply_markup=markup)
 
+    # Checking if user entered date in right format for us (if not - retry)
     except ValueError:
         bot.send_message(message.chat.id, 'Invalid format🫠\nPlease enter the month in the format <em>yyyy-mm</em>',
                          parse_mode='html')
         bot.register_next_step_handler(message, get_month)
 
 
+# Processing callback data from newly made keyboard
 @bot.callback_query_handler(func=lambda call: call.data.startswith('revenue_plot_') or call.data.startswith(
     'item_plot_') or call.data.startswith('category_plot_') or call.data == 'back_to_keyboard')
+
+# Func that sends chosen plot
 def send_plot(call):
     bot.clear_step_handler_by_chat_id(call.message.chat.id)
-    # Extract the month from callback_data
+
+    # Extract the month from callback data
     selected_month = call.data.split('_')[-1]
 
+    # 1st plot
     if "revenue_plot" in call.data:
         plot_path = revenue_plot(call.message.chat.id, selected_month)
 
@@ -212,6 +237,7 @@ def send_plot(call):
         else:
             bot.send_message(call.message.chat.id, f'No revenue plot available for {selected_month}.')
 
+    # 2nd plot
     elif "item_plot" in call.data:
         item_plot_path = revenue_by_item_plot(call.message.chat.id, selected_month)
 
@@ -222,6 +248,7 @@ def send_plot(call):
         else:
             bot.send_message(call.message.chat.id, f'No item distribution chart available for {selected_month}.')
 
+    # 3rd plot
     elif "category_plot" in call.data:
         category_plot_path = pie_plot_category(call.message.chat.id, selected_month)
 
@@ -232,11 +259,12 @@ def send_plot(call):
         else:
             bot.send_message(call.message.chat.id, f'No category distribution chart available for {selected_month}.')
 
+    # Returning to the main keyboard
     elif call.data == "back_to_keyboard":
 
         bot.send_message(call.message.chat.id, 'Choose the type of report on keyboard', reply_markup=markup_keyboard())
 
-    bot.answer_callback_query(call.id)  # Acknowledge the callback query
+    bot.answer_callback_query(call.id)
 
 
 bot.polling(none_stop=True)

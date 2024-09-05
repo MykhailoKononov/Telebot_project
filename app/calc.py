@@ -13,8 +13,10 @@ matplotlib.use('Agg')
 logging.basicConfig(level=logging.INFO)
 
 
+# Func that connects to Postgres Database
 def get_data_sqldb(query):
-    conn = psycopg2.connect(f"dbname={config.DB_NAME} user={config.USER} host={config.HOST} password={config.PASSWORD} port={config.PORT}")
+    conn = psycopg2.connect(
+        f"dbname={config.DB_NAME} user={config.USER} host={config.HOST} password={config.PASSWORD} port={config.PORT}")
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     cur.execute(query)
     rows = cur.fetchall()
@@ -25,30 +27,26 @@ def get_data_sqldb(query):
     return pd.DataFrame(data)
 
 
-# запросы для выгрузки таблиц
-
+# Queries to overwrite data from database to variables _df
 orders_df = get_data_sqldb("""select* from orders""")
-
 categories_df = get_data_sqldb("""select* from categories""")
-
 items_df = get_data_sqldb("""select* from items""")
-
 customers_df = get_data_sqldb('''select* from customers''')
 
-
+# Joining dataframes into one, dropping not needed columns
 orders_customers = pd.merge(orders_df, customers_df, on='customer_id')
-
 orders_customers_items = pd.merge(orders_customers, items_df, on='item_id', suffixes=('_orders', '_items'))
-
 merged_df = pd.merge(orders_customers_items, categories_df, on='category_id', suffixes=('_orders', '_categories'))
-
 df = merged_df.drop(['item_id', 'first_name', 'last_name', 'description_orders',
                      'category_id', 'description_categories'], axis=1)
+# Adding new column year_month and overwriting date columns into str
 df['date'] = pd.to_datetime(df['date'])
 df['year_month'] = df['date'].dt.strftime('%Y-%m')
 df['date'] = df['date'].dt.strftime('%Y-%m-%d')
 
 
+# DAILY METRICS
+# 2 next funcs calculate total revenue and percent difference for daily option
 def revenue_per_day(date):
     revenue = df['revenue'][df['date'] == date].sum()
     return revenue
@@ -61,6 +59,7 @@ def previous_day_revenue(date):
     return revenue_per_day(previous_date_str)
 
 
+# 2 next funcs calculate AOV (average order value) and percent difference for daily option
 def avg_revenue_per_order_daily(date):
 
     revenue_sum = df['revenue'][df['date'] == date].sum()
@@ -81,6 +80,7 @@ def previous_day_avg_revenue_per_order(date):
     return avg_revenue_per_order_daily(previous_date_str)
 
 
+# 2 next funcs calculate ARPU (average revenue per user/customer) and percent difference for daily option
 def arpu_daily(date):
 
     revenue_sum = df['revenue'][df['date'] == date].sum()
@@ -102,8 +102,7 @@ def previous_arpu_daily(date):
 
 
 # MONTHLY METRICS
-
-
+# 2 next funcs calculate total revenue and percent difference for monthly option
 def revenue_per_month(year_month):
     revenue_monthly = df['revenue'][df['year_month'] == year_month].sum()
     return revenue_monthly
@@ -116,6 +115,7 @@ def previous_month_revenue(year_month):
     return revenue_per_month(previous_month_str)
 
 
+# 2 next funcs calculate AOV and percent difference for monthly option
 def avg_revenue_per_order_monthly(year_month):
     revenue_sum = df['revenue'][df['year_month'] == year_month].sum()
     order_count = df['order_id'][df['year_month'] == year_month].count()
@@ -134,6 +134,7 @@ def previous_month_avg_revenue_per_order(year_month):
     return avg_revenue_per_order_monthly(previous_month_str)
 
 
+# 2 next funcs calculate ARPU and percent difference for monthly option
 def arpu_monthly(year_month):
     revenue_sum = df['revenue'][df['year_month'] == year_month].sum()
     unique_customers = df[df['year_month'] == year_month]['customer_id'].nunique()
@@ -153,6 +154,7 @@ def previous_arpu_monthly(year_month):
     return arpu_monthly(previous_month_str)
 
 
+# 1st graphic for 'Select month' Inline Keyboard Button (Revenue Distribution)
 def revenue_plot(chat_id, year_month):
     df['date'] = pd.to_datetime(df['date'])
     df_filtered = df[df['year_month'] == year_month]
@@ -179,6 +181,7 @@ def revenue_plot(chat_id, year_month):
     return image_path
 
 
+# 2nd graphic for 'Select month' Inline Keyboard Button (Distribution by item)
 def revenue_by_item_plot(chat_id, year_month):
     df_filtered = df[df['year_month'] == year_month]
 
@@ -196,6 +199,7 @@ def revenue_by_item_plot(chat_id, year_month):
     plt.xticks(rotation=45)
     plt.grid(True)
 
+    # Saving plot with unique name
     image_path = f'revenue_distribution_by_item_{year_month}_{chat_id}.png'
     plt.savefig(image_path, bbox_inches='tight')
     plt.close()
@@ -203,6 +207,7 @@ def revenue_by_item_plot(chat_id, year_month):
     return image_path
 
 
+# 3rd graphic for 'Select month' Inline Keyboard Button (Distribution by category)
 def pie_plot_category(chat_id, year_month):
 
     df_filtered = df[df['year_month'] == year_month]
@@ -219,6 +224,7 @@ def pie_plot_category(chat_id, year_month):
 
     plt.title(f'Revenue Distribution by Category for {year_month}', fontsize=16)
 
+    # Saving plot with unique name
     image_path = f'revenue_distribution_by_category{year_month}_{chat_id}.png'
     plt.savefig(image_path, bbox_inches='tight')
     plt.close()
@@ -226,6 +232,7 @@ def pie_plot_category(chat_id, year_month):
     return image_path
 
 
+# 1st graphic for 'Annual report' Main Inline Keyboard Button
 def annual_revenue(chat_id):
     df['year_month'] = pd.Categorical(df['year_month'], categories=sorted(df['year_month'].unique()), ordered=True)
 
@@ -242,6 +249,7 @@ def annual_revenue(chat_id):
     plt.xticks(rotation=45)
     plt.grid(True)
 
+    # Saving plot with unique name
     image_path = f'annual_rolling_plot_{chat_id}.png'
     plt.savefig(image_path, bbox_inches='tight')
     plt.close()
@@ -249,6 +257,7 @@ def annual_revenue(chat_id):
     return image_path
 
 
+# 2nd graphic for 'Annual report' Main Inline Keyboard Button
 def boxplot(chat_id):
     df['year_month'] = pd.to_datetime(df['year_month'])
 
@@ -265,6 +274,7 @@ def boxplot(chat_id):
     plt.grid(True)
     df['year_month'] = df['year_month'].dt.strftime('%Y-%m')
 
+    # Saving plot with unique name
     image_path = f'annual_box_plot_{chat_id}.png'
     plt.savefig(image_path, bbox_inches='tight')
     plt.close()
@@ -272,6 +282,7 @@ def boxplot(chat_id):
     return image_path
 
 
+# 3rd graphic for 'Annual report' Main Inline Keyboard Button
 def plot_arpu_aov(chat_id):
 
     df['year_month'] = pd.to_datetime(df['year_month'])
@@ -304,6 +315,7 @@ def plot_arpu_aov(chat_id):
     axes[1].grid(True)
     df['year_month'] = df['year_month'].dt.strftime('%Y-%m')
 
+    # Saving plot with unique name
     image_path = f'arpu_aov_plot_{chat_id}.png'
     plt.savefig(image_path, bbox_inches='tight')
     plt.close()
