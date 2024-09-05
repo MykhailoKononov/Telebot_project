@@ -82,6 +82,8 @@ choose another date', reply_markup=markup_keyboard())
                 bot.send_photo(call.message.chat.id, photo)
             os.remove(box_plot_path)
 
+    bot.answer_callback_query(call.id)
+
 
 # Func that sends main metrics for selected option "Today"
 def get_date(message):
